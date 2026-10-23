@@ -18,14 +18,19 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 - 텍스트 검색: 768/256/128차원 모두 정답 1위
 - 이미지 검색: 장면에 맞춘 질의 5개 중 4개 정답 (오답은 렌즈가 가려진 프레임)
 - 음성 검색: 소리 종류(목소리·경보음·잡음)는 맞히지만, 말의 내용("덥다고 냉방 요청")으로는 못 찾음
-- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md)
+- 웹캠 물체 검색(8단계): 라벨 목록 밖 물체는 가장 비슷한 이름으로 억지로 붙는다. YOLOE 박스 + 임베딩 재라벨(`--mode yoloe --relabel`)이 캔·컵·휴대폰을 모두 맞혔다. 약 12 fps, 크롭당 0.75 s, RAM 3.5 GB
+- 도메인 미세 조정(7단계): 직접 만든 강의실 데이터(학습 282쌍)로 보드에서 4분 학습. accuracy@3 0.967 → 0.983, nDCG@10 0.922 → 0.931, accuracy@1 0.833 그대로 (60문항 중 1문항 차이라 향상이라 보기 어려움)
+- 사람 동작 인식(9단계): 프레임 단위 판정은 횟수가 실제의 6~16배로 부풀고, 시간 안정화로 1/3~1/4로 줄었다. 학습 모델(GRU)은 같은 녹화 검증 100%였지만 처음 보는 위치에서 25%, 3m 실시간 14%
+- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step7.md](reports/step7.md) (7단계), [reports/step8.md](reports/step8.md) (8단계), [reports/step9.md](reports/step9.md) (9단계)
 
 ## 역할
 
 | 단계 | 담당 |
 |---|---|
 | 1~6단계 (환경, 텍스트·이미지·동영상·음성 검색, 자원 측정) | 민서 (iamminseo) |
-| 7단계~ (도메인 미세 조정, 웹캠 응용) | 팀원 |
+| 7단계 (도메인 미세 조정: 데이터 직접 작성, 학습 전후 비교) | 성찬 |
+| 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
+| 9단계 (사람 동작 인식: raw vs smooth 비교, 녹화·GRU 학습) | 성찬 |
 
 ## 환경
 
@@ -62,6 +67,9 @@ arecord -D plughw:0,0 -f S16_LE -r 16000 -c 1 -d 5 media/speech.wav   # 웹캠 �
 python test_audio.py                   # 5단계: 음성 검색
 python test_audio2.py                  # 5단계 개선: 녹음 크기 확인, 소리 종류 vs 말 내용 질의 비교
 for m in text image video audio; do python bench.py $m 2>/dev/null | grep RESULT; done   # 6단계 측정
+python data/make_data.py && python eval_ir.py && python train_ft.py   # 7단계: 데이터 생성, 기준 평가, 미세 조정
+python app.py --mode yoloe --relabel   # 8단계: 웹캠 물체 검색, http://<Jetson IP>:8200
+python pose_app.py                     # 9단계: 사람 동작 인식, http://<Jetson IP>:8200
 ```
 
 `test_vision3.py` 의 질의와 정답 번호는 이 저장소의 [reports/frames/](reports/frames/) 장면 기준이다. 새로 녹화하면 장면에 맞게 바꿔야 한다.
