@@ -14,8 +14,10 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--mode", choices=["yolo", "relabel", "yoloe"], default="relabel")
 ap.add_argument("--conf", type=float, default=None, help="검출 신뢰도 (기본: 모드별 값)")
 ap.add_argument("--port", type=int, default=8200)
+ap.add_argument("--relabel", action="store_true", help="yoloe 박스에도 임베딩 재라벨 적용 (확장)")
 args = ap.parse_args()
 MODE = args.mode
+RELABEL = MODE == "relabel" or args.relabel   # 크롭 임베딩으로 라벨을 다시 정할지
 
 # ---------------- 설정 ----------------
 CAM, W, H     = 0, 1280, 720          # /dev/video0
@@ -25,7 +27,7 @@ REFRESH_S     = 30                    # 같은 추적 ID 재임베딩 간격(초
 SKIP_CLASSES  = {"person"}            # 크롭·저장하지 않을 클래스
 DIM, MAX_ITEMS = 512, 1000
 MODEL_ID      = "google/embeddinggemma-2"   # 7단계 모델은 텍스트 전용이라 여기서는 원본 사용
-CROP_DIR      = f"crops/{MODE}"       # 모드별로 크롭을 따로 저장해 나중에 비교
+CROP_DIR      = f"crops/{MODE}{'_relabel' if args.relabel else ''}"       # 모드별로 크롭을 따로 저장해 나중에 비교
 
 # YOLO(COCO 80종)에 없는 물체는 비슷한 클래스로 오인식된다 (세탁기→oven, 전지 포장→cell phone).
 # relabel: 크롭 임베딩과 아래 라벨 문구의 유사도로 라벨을 다시 붙인다.
@@ -96,7 +98,7 @@ def capture_loop():
         for (x1, y1, x2, y2), tid, c, cf in zip(r.boxes.xyxy.int().tolist(), ids,
                 r.boxes.cls.int().tolist(), r.boxes.conf.tolist()):
             yolo = det.names[c]
-            en = track_label[tid][0] if (MODE == "relabel" and tid in track_label) else yolo
+            en = track_label[tid][0] if (RELABEL and tid in track_label) else yolo
             color = (0, 200, 255) if en != yolo else (0, 255, 0)   # 재라벨된 박스는 주황색
             cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2)
             cv2.putText(vis, f"{en} {cf:.2f}", (x1, max(y1 - 6, 14)),
@@ -133,7 +135,7 @@ def embed_loop():
         with idx_lock:
             for (tid, name, cf, ts, _), p, v, sim in zip(batch, paths, vecs, sims):
                 j = int(sim.argmax())
-                if MODE != "relabel":            # yolo / yoloe: 검출기 라벨 그대로
+                if not RELABEL:                  # yolo / yoloe: 검출기 라벨 그대로
                     en, ko, ls = name, KO.get(name, name), float(sim[j])
                 elif sim[j] >= LABEL_MIN:
                     en, ko, ls = LABELS[j][0], LABELS[j][1], float(sim[j])
