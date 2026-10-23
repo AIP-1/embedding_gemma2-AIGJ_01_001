@@ -1,11 +1,11 @@
 # Jetson EmbeddingGemma 2 실습
 
-Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 텍스트·이미지·동영상을 하나의 벡터 공간에서 검색하고, 구성별 자원 사용량을 측정한 실습이다.
+Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 텍스트·이미지·동영상·음성을 하나의 벡터 공간에서 검색하고, 구성별 자원 사용량을 측정한 실습이다.
 
 ## 요약
 
 - **문제**: 2명이 같이 쓰는 8GB 보드에서 멀티모달 임베딩 검색이 되는지, 자원은 얼마나 드는지
-- **접근**: JetPack 7용 cu132 torch 위에 sentence-transformers 6.2를 버전 고정으로 설치, USB 웹캠으로 직접 찍은 영상·프레임으로 검색·측정
+- **접근**: JetPack 7용 cu132 torch 위에 sentence-transformers 6.2를 버전 고정으로 설치, USB 웹캠으로 직접 찍은 영상·프레임과 웹캠 마이크 녹음으로 검색·측정
 - **결과** (MAXN_SUPER, bfloat16, 워밍업 뒤 3회 중앙값)
 
 | 구성 | 입력 | 지연 | 로드 RAM | GPU 최대 |
@@ -13,21 +13,24 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 | 텍스트 전용 | 질의 2개 | 160 ms | +0.8 GB | 11% |
 | +비전 | 이미지 5장 (640x480) | 2.1 s | +0.8 GB | 99% |
 | +비전 | 동영상 10초 (11프레임) | 2.0 s | +1.0 GB | 99% |
+| +오디오 | WAV 3개 (16 kHz 모노) | 341 ms | +1.0 GB | 67% |
 
 - 텍스트 검색: 768/256/128차원 모두 정답 1위
 - 이미지 검색: 장면에 맞춘 질의 5개 중 4개 정답 (오답은 렌즈가 가려진 프레임)
+- 음성 검색: 소리 종류(목소리·경보음·잡음)는 맞히지만, 말의 내용("덥다고 냉방 요청")으로는 못 찾음
 - 웹캠 물체 검색(8단계): 라벨 목록 밖 물체는 가장 비슷한 이름으로 억지로 붙는다. YOLOE 박스 + 임베딩 재라벨(`--mode yoloe --relabel`)이 캔·컵·휴대폰을 모두 맞혔다. 약 12 fps, 크롭당 0.75 s, RAM 3.5 GB
 - 도메인 미세 조정(7단계): 직접 만든 강의실 데이터(학습 282쌍)로 보드에서 4분 학습. accuracy@3 0.967 → 0.983, nDCG@10 0.922 → 0.931, accuracy@1 0.833 그대로 (60문항 중 1문항 차이라 향상이라 보기 어려움)
-- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step8.md](reports/step8.md) (8단계), [reports/step7.md](reports/step7.md) (7단계), [reports/step9.md](reports/step9.md) (9단계)
+- 사람 동작 인식(9단계): 프레임 단위 판정은 횟수가 실제의 6~16배로 부풀고, 시간 안정화로 1/3~1/4로 줄었다. 학습 모델(GRU)은 같은 녹화 검증 100%였지만 처음 보는 위치에서 25%, 3m 실시간 14%
+- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step7.md](reports/step7.md) (7단계), [reports/step8.md](reports/step8.md) (8단계), [reports/step9.md](reports/step9.md) (9단계)
 
 ## 역할
 
 | 단계 | 담당 |
 |---|---|
-| 1~4, 6단계 (환경, 텍스트·이미지·동영상 검색, 자원 측정) | 민서 (iamminseo) |
-| 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
-| 9단계 (사람 동작 인식: raw vs smooth 비교) | 성찬 |
+| 1~6단계 (환경, 텍스트·이미지·동영상·음성 검색, 자원 측정) | 민서 (iamminseo) |
 | 7단계 (도메인 미세 조정: 데이터 직접 작성, 학습 전후 비교) | 성찬 |
+| 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
+| 9단계 (사람 동작 인식: raw vs smooth 비교, 녹화·GRU 학습) | 성찬 |
 
 ## 환경
 
@@ -59,8 +62,14 @@ python test_text.py                    # 3단계: 한국어 텍스트 검색, �
 python record.py                       # 웹캠 10초 녹화 → media/clip.mp4, 2초마다 frame_XX.jpg
 python test_vision2.py                 # 4단계: 이미지·동영상 임베딩과 검색
 python test_vision3.py                 # 4단계 개선: 장면 맞춤 질의 정답률, prompt_name 유무 비교
-for m in text image video; do python bench.py $m 2>/dev/null | grep RESULT; done   # 6단계 측정
+python make_audio.py                   # 5단계: 경보음·잡음 생성 (16 kHz 모노)
+arecord -D plughw:0,0 -f S16_LE -r 16000 -c 1 -d 5 media/speech.wav   # 웹캠 마이크로 5초 녹음
+python test_audio.py                   # 5단계: 음성 검색
+python test_audio2.py                  # 5단계 개선: 녹음 크기 확인, 소리 종류 vs 말 내용 질의 비교
+for m in text image video audio; do python bench.py $m 2>/dev/null | grep RESULT; done   # 6단계 측정
+python data/make_data.py && python eval_ir.py && python train_ft.py   # 7단계: 데이터 생성, 기준 평가, 미세 조정
 python app.py --mode yoloe --relabel   # 8단계: 웹캠 물체 검색, http://<Jetson IP>:8200
+python pose_app.py                     # 9단계: 사람 동작 인식, http://<Jetson IP>:8200
 ```
 
 `test_vision3.py` 의 질의와 정답 번호는 이 저장소의 [reports/frames/](reports/frames/) 장면 기준이다. 새로 녹화하면 장면에 맞게 바꿔야 한다.
@@ -71,6 +80,8 @@ python app.py --mode yoloe --relabel   # 8단계: 웹캠 물체 검색, http://<
 
 - `{"video": "clip.mp4"}` 처럼 파일 경로로 넣으면 torchcodec이 필요한데, 이 보드에서는 NVIDIA판 ffmpeg 8 라이브러리를 못 찾아 실패한다. PyAV로 1초에 1장씩 프레임을 뽑아 `{"video": numpy 배열}` 로 넣으면 동작한다.
 - `record.py` 로 쓴 mp4는 fps 메타데이터가 정확하지 않아, 읽을 때 15프레임 간격(=1 fps)으로 고정한다.
+- 음성도 같은 이유로 `{"audio": "x.wav"}` 대신 soundfile로 읽은 배열을 넣는다. 이 보드의 ffmpeg에는 소리 생성 기능(lavfi)이 없어 `make_audio.py`로 만든다.
+- 갑자기 전원이 나갔다 켜지면 GPU 초기화가 실패할 수 있다 (`torch.cuda.is_available()` False, dmesg `ACR bootstrap failed`). 전원을 끄고 다시 켜면 풀린다.
 - 영상·모델 파일은 git에 올리지 않는다 (`.gitignore`).
 
 ## AI 활용

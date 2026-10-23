@@ -1,5 +1,5 @@
 import sys, re, glob, time, threading, subprocess, av, numpy as np, torch
-mode = sys.argv[1]  # text | image | video
+mode = sys.argv[1]  # text | image | video | audio
 st = {"ram": 0, "gpu": 0, "on": False}
 def watch():
     p = subprocess.Popen(["tegrastats", "--interval", "200"], stdout=subprocess.PIPE, text=True)
@@ -11,13 +11,17 @@ def watch():
 threading.Thread(target=watch, daemon=True).start(); time.sleep(1)
 ram0 = st["now"]
 from eg2 import load
-model = load(vision=(mode != "text")); torch.cuda.synchronize(); time.sleep(1)
+model = load(vision=mode in ("image", "video"), audio=(mode == "audio")); torch.cuda.synchronize(); time.sleep(1)
 ram1 = st["now"]
 if mode == "text":
     inp, desc = ["수업 중에 졸리고 머리가 맑지 않아요", "여름에 냉방 몇 도로 맞춰야 하나요?"], "질의 2개"
     run = lambda: model.encode(inp, prompt_name="SearchQuery")
 elif mode == "image":
     inp = [{"image": p} for p in sorted(glob.glob("media/frame_*.jpg"))]; desc = f"이미지 {len(inp)}장"
+    run = lambda: model.encode(inp)
+elif mode == "audio":
+    import soundfile as sf
+    inp = [{"audio": sf.read(f, dtype="float32")[0]} for f in ["media/speech.wav", "media/beep.wav", "media/noise.wav"]]; desc = "WAV 3개"
     run = lambda: model.encode(inp)
 else:
     c = av.open("media/clip.mp4"); fr = np.stack([f.to_ndarray(format="rgb24") for i, f in enumerate(c.decode(video=0)) if i % 15 == 0]); c.close()
