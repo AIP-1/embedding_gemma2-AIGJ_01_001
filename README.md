@@ -18,7 +18,7 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 - 이미지 검색: 장면에 맞춘 질의 5개 중 4개 정답 (오답은 렌즈가 가려진 프레임)
 - 웹캠 물체 검색(8단계): 라벨 목록 밖 물체는 가장 비슷한 이름으로 억지로 붙는다. YOLOE 박스 + 임베딩 재라벨(`--mode yoloe --relabel`)이 캔·컵·휴대폰을 모두 맞혔다. 약 12 fps, 크롭당 0.75 s, RAM 3.5 GB
 - 도메인 미세 조정(7단계): 직접 만든 강의실 데이터(학습 282쌍)로 보드에서 4분 학습. accuracy@3 0.967 → 0.983, nDCG@10 0.922 → 0.931, accuracy@1 0.833 그대로 (60문항 중 1문항 차이라 향상이라 보기 어려움)
-- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step8.md](reports/step8.md) (8단계), [reports/step7.md](reports/step7.md) (7단계)
+- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step8.md](reports/step8.md) (8단계), [reports/step7.md](reports/step7.md) (7단계), [reports/step9.md](reports/step9.md) (9단계)
 
 ## 역할
 
@@ -26,6 +26,7 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 |---|---|
 | 1~4, 6단계 (환경, 텍스트·이미지·동영상 검색, 자원 측정) | 민서 (iamminseo) |
 | 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
+| 9단계 (사람 동작 인식: raw vs smooth 비교) | 성찬 |
 | 7단계 (도메인 미세 조정: 데이터 직접 작성, 학습 전후 비교) | 성찬 |
 
 ## 환경
