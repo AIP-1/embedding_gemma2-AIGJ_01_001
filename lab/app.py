@@ -36,6 +36,8 @@ LABELS = [
     ("cell phone", "휴대폰"), ("battery pack", "원통형 전지 포장"), ("AA battery", "건전지"),
     ("laptop", "노트북"), ("monitor", "모니터"), ("keyboard", "키보드"), ("mouse", "마우스"),
     ("cup", "컵"), ("water bottle", "물병"), ("book", "책"), ("backpack", "가방"), ("chair", "의자"),
+    # 강의실에서 직접 찍은 물체: 목록에 없을 때 캔은 cup·cell phone 으로 잡혔다
+    ("drink can", "캔 음료"), ("clear plastic cup", "투명 플라스틱 컵"), ("tumbler", "텀블러"),
 ]
 LABEL_MIN     = 0.20                  # 이 점수 미만이면 YOLO 라벨 유지 (웹의 점수를 보고 조정)
 os.makedirs(CROP_DIR, exist_ok=True)
