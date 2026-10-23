@@ -1,0 +1,8 @@
+*.mp4
+*.engine
+*.onnx
+*.pt
+*.safetensors
+__pycache__/
+.venv/
+lab/media/
