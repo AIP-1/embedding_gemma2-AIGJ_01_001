@@ -1,16 +1,16 @@
-# EmbeddingGemma 2 실습 결과 (1~4, 6단계) — 민서
+# EmbeddingGemma 2 실습 결과 (1~6단계) — 민서
 
 ## 요약
 
-- **문제**: Jetson Orin Nano Super 8GB(공용 보드, 2명 동시 사용)에서 EmbeddingGemma 2로 텍스트·이미지·동영상을 한 벡터 공간에서 검색할 수 있는지, 자원은 얼마나 드는지 확인한다.
-- **접근**: JetPack 7용 cu132 torch 위에 sentence-transformers 6.2를 버전 고정(`-c torch-pin.txt`)으로 설치하고, USB 웹캠으로 직접 찍은 10초 영상과 프레임으로 검색·측정했다.
+- **문제**: Jetson Orin Nano Super 8GB(공용 보드, 2명 동시 사용)에서 EmbeddingGemma 2로 텍스트·이미지·동영상·음성을 한 벡터 공간에서 검색할 수 있는지, 자원은 얼마나 드는지 확인한다.
+- **접근**: JetPack 7용 cu132 torch 위에 sentence-transformers 6.2를 버전 고정(`-c torch-pin.txt`)으로 설치하고, USB 웹캠으로 직접 찍은 10초 영상·프레임과 웹캠 마이크로 녹음한 목소리로 검색·측정했다.
 - **결과**
   - 텍스트 검색: 768/256/128차원 모두 정답 1위, 질의 2개 **160 ms**, 모델 로드 RAM **+0.8 GB**
   - 이미지 검색: 장면 맞춤 질의 **정답률 4/5**, 이미지 5장 **2.1 s** (장당 약 420 ms), GPU 최대 **99%**, 로드 RAM **+0.8 GB**
   - 동영상: 10초(11프레임) **2.0 s** (프레임당 약 190 ms), 로드 RAM **+1.0 GB**, torch 최대 **1.25 GB**
-  - 5단계(음성)는 이 보드에서 torchaudio(CUDA 13.0) ↔ torch(CUDA 13.2) 불일치로 건너뜀
+  - 음성: WAV 3개 **341 ms**, 로드 RAM **+1.0 GB**, GPU 최대 **67%**. 소리 종류(목소리·경보음·잡음) 질의는 맞히지만, **말의 내용("덥다고 냉방 요청")으로는 못 찾음** (2/3)
 
-측정 조건: JetPack 7.2.1 (L4T R39.2.1), 전력 모드 MAXN_SUPER, 클럭 고정 안 함(`jetson_clocks` 미사용), torch 2.14.1+cu132, transformers 5.20.1, sentence-transformers 6.2.0, **bfloat16**, 2026-10-23. 지연은 워밍업 1회 뒤 3회 측정의 중앙값. RAM은 `tegrastats` 시스템 전체 사용량이라 같은 보드의 다른 서비스·파트너 작업이 포함된다.
+측정 조건: JetPack 7.2.1 (L4T R39.2.1), 전력 모드 MAXN_SUPER, 클럭 고정 안 함(`jetson_clocks` 미사용), torch 2.14.1+cu132, transformers 5.20.1, sentence-transformers 6.2.0, **bfloat16**, 2026-10-23 (5단계는 같은 날 오후, 전원 재투입 뒤). 지연은 워밍업 1회 뒤 3회 측정의 중앙값. RAM은 `tegrastats` 시스템 전체 사용량이라 같은 보드의 다른 서비스·파트너 작업이 포함된다.
 
 ## 6단계 자원 측정표 (파트너 공유용)
 
@@ -19,12 +19,12 @@
 | 텍스트 전용 | 270M | 4068 → 4859 (+791) | 4972 | 질의 2개 | **160** | 167, 160, 150 | 11 | 530 |
 | +비전 | 440M | 3977 → 4798 (+821) | 5823 | 이미지 5장 (640x480) | **2101** | 2170, 2101, 2096 | 99 | 1225 |
 | +비전 | 440M | 3959 → 5000 (+1041) | 5784 | 동영상 10초, 11프레임 | **2047** | 2047, 2047, 2034 | 99 | 1248 |
-| +오디오 | 570M | — | — | WAV 3개 | — | — | — | 건너뜀 (torchaudio 불일치) |
+| +오디오 | 570M | 3877 → 4857 (+980) | 5439 | WAV 3개 (16 kHz 모노, 3~5초) | **341** | 353, 340, 341 | 67 | 1157 |
 | 전체 | 740M | — | — | 혼합 | — | — | — | 미측정 |
 
 읽는 법:
 - **한 번 올리면 약 0.8~1.0 GB, 실행 중 시스템 전체가 5.8 GB 까지 올라간다.** 8GB(가용 7.3GB) 보드에서 둘이 동시에 비전 모델을 올리면 여유가 거의 없다 → 실행 전 `free -h` 로 available 2.5 GB 이상 확인 (파트너와 합의한 규칙).
-- 텍스트는 GPU를 11%만 쓰고 끝난다(질의가 짧아 측정 간격 200 ms 사이에 끝남). 이미지·동영상은 GPU 99% → **비전 쪽은 GPU가 병목**.
+- 텍스트는 GPU를 11%만 쓰고 끝난다(질의가 짧아 측정 간격 200 ms 사이에 끝남). 이미지·동영상은 GPU 99% → **비전 쪽은 GPU가 병목**. 음성은 67%로 그 중간.
 - 동영상 프레임 1장(약 190 ms)이 이미지 1장(약 420 ms)보다 싸다. 비디오 경로가 프레임당 토큰을 더 적게 쓰는 것으로 추정 (확인 안 함).
 
 ## 단계별 결과
@@ -81,22 +81,62 @@
 - 프롬프트(`prompt_name="SearchQuery"`) 효과: 정답률은 같다. 사람·물체처럼 뚜렷한 장면은 1·2위 차이가 커지고(0.059 → 0.113), 조명·흐린 장면은 작아졌다 → 이미지 검색에서는 일관되지 않음. 표본 5개라 결론은 약하다.
 - 동영상 11프레임 질의 유사도: "사람이 V 사인을 한다" 0.708, "천장 조명" 0.682, "책상과 키보드" 0.723. 영상 하나에 여러 장면이 섞여 셋 다 비슷하게 높다 → 장면을 찾으려면 영상 전체가 아니라 프레임 단위 검색이 맞다.
 
+### 5단계 음성 (웹캠 C920 마이크)
+
+자료 (`make_audio.py`, 모두 16 kHz 모노):
+
+| 파일 | 내용 | 만든 방법 |
+|---|---|---|
+| speech.wav | "강의실이 너무 덥습니다. 에어컨을 켜 주세요." 5초 | 웹캠 마이크 `arecord -D plughw:0,0` |
+| beep.wav | 1 kHz 경보음 3초 | numpy 사인파 |
+| noise.wav | 핑크 노이즈 5초 | numpy (1/f 스펙트럼) |
+
+가이드는 합성 음성(espeak-ng)과 ffmpeg 생성 소리를 쓰지만, espeak-ng 는 미설치(sudo 필요)이고 NVIDIA판 ffmpeg 에는 소리 생성 기능(lavfi)이 없어 위처럼 바꿨다.
+
+**1차 (`test_audio.py`, 가이드 질의)** — 정답률 2/3
+
+| 질의 | 정답 | SearchQuery 프롬프트 | 프롬프트 없음 |
+|---|---|---|---|
+| 덥다고 냉방을 요청하는 목소리 | speech | X (noise 0.655, 차 0.023) | X (noise 0.744, 차 0.017) |
+| 날카로운 경보음 | beep | O (0.702, 차 0.030) | O (0.800, 차 0.049) |
+| 웅웅거리는 배경 소음 | noise | O (0.684, 차 0.012) | O (0.772, 차 0.006) |
+
+**원인 분리 (`test_audio2.py`)** — 녹음이 작아서인지, 말의 내용을 못 알아들어서인지
+
+- 녹음 크기: speech 최대 1.000, RMS 0.364 → 작기는커녕 너무 커서 일부 찢어짐(클리핑). 크기 문제는 아니다.
+- 질의별 유사도 (SearchQuery 프롬프트):
+
+| 질의 | speech | beep | noise | 1위 |
+|---|---|---|---|---|
+| 사람이 말하는 목소리 | **0.661** | 0.657 | 0.635 | speech (차 0.004) |
+| 한국어로 말하는 사람 | **0.660** | 0.581 | 0.575 | speech (차 0.079) |
+| a person speaking | **0.675** | 0.638 | 0.654 | speech (차 0.021) |
+| 덥다고 냉방을 요청하는 목소리 | 0.634 | 0.624 | **0.658** | noise ✗ |
+
+- **"목소리"라는 소리 종류로 찾으면 3/3 정답, 말의 내용으로 찾으면 실패.** 이 모델의 음성 임베딩은 소리의 종류는 담지만 말의 뜻(받아쓰기 수준)은 거의 담지 않는 것으로 보인다. 녹음 1개라 결론은 약하다.
+- 활용 시사점: 교실에서 "누가 말하고 있나 / 경보가 울렸나" 같은 소리 종류 검색은 가능, "에어컨 켜 달라는 요청"처럼 내용 검색이 필요하면 음성 인식(STT) 후 텍스트 임베딩이 맞다.
+
 ## 실패 → 원인 → 해결
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | 시작 시 available 2.0 GiB | 관리자 계정의 `gnome-system-monitor` 가 1.8 GB 점유 | 해당 프로세스 종료 → 3.7 GiB |
-| `[audio]` 설치 시 torchaudio 2.11.0 이 함께 설치됨 | PyPI torchaudio는 CUDA 13.0 빌드, torch는 13.2 (가이드 Q7) | `pip uninstall -y torchaudio`, 5단계는 건너뜀 |
+| `[audio]` 설치 시 torchaudio 2.11.0 이 함께 설치됨 | PyPI torchaudio는 CUDA 13.0 빌드, torch는 13.2 (가이드 Q7) | `pip uninstall -y torchaudio`. torchaudio 없이도 5단계 동작 (아래 배열 입력) |
 | `ffmpeg: command not found` 로 웹캠 녹화 불가 | 보드에 ffmpeg 미설치, 일반 계정은 sudo 없음 | PyAV(`av`)로 직접 녹화 (`record.py`), 이후 관리자 계정으로 `apt install ffmpeg` (8.0.1, upgrade 0개) |
 | `{"video": "clip.mp4"}` → `torchcodec is not installed` | torchvision 0.26에서 `read_video` 제거 | torchcodec 0.17.0 설치 |
 | torchcodec 로드 실패 `libswscale.so.9` 없음 | NVIDIA판 ffmpeg 8 라이브러리 구성과 torchcodec 기대가 다름 (추정) | PyAV로 프레임을 뽑아 `{"video": ndarray}` 로 전달 → 동작 |
 | 동영상이 1프레임만 들어감 | PyAV로 쓴 mp4의 `average_rate` 메타데이터가 틀림 | 15프레임 간격(=1 fps) 고정 → 11프레임 |
 | 보드 자리 이동 후 SSH·Tailscale 끊김 | 전원이 꺼지며 시계가 틀어짐 → TLS 인증서 검증 실패 | Jetson 화면에서 시간 동기화 후 `sudo systemctl restart tailscaled`. 시계열 수집기·서비스는 @reboot 로 자동 복구 확인 |
 | 2회차 실행 시 available 1.37 → 0.72 GiB | 파트너 작업과 시간이 겹침 (추정) | 실행 전 available 2.5 GB 이상 확인 규칙 |
+| 5단계 `ffmpeg -f lavfi` → `Unknown input format: 'lavfi'` | NVIDIA판 ffmpeg 8 빌드에 lavfi 미포함 | numpy·soundfile 로 경보음·잡음 생성 (`make_audio.py`) |
+| 5단계 녹음 중 SSH 끊김, 보드 `up 2 min` | 전원이 갑자기 끊겼다 다시 들어옴 (`last -x` 에 정상 종료 기록 없음). 부팅 직후 시계 1970 → Tailscale 꺼짐 | Jetson 화면에서 Tailscale 재시작. 녹음 파일은 정상 저장. 수집기·서비스 자동 복구 |
+| 재부팅 뒤 `No CUDA GPUs are available` | dmesg `nvgpu ... ACR bootstrap failed` — 전원 재투입 중 GPU 펌웨어 초기화 실패, `/dev/nvgpu/igpu0/` 에 `power` 만 생성 | 파트너와 합의 후 전원 끄고 다시 켜기 → `torch.cuda.is_available()` True |
+| `{"audio": "speech.wav"}` → `Could not load libtorchcodec` | 4단계 동영상과 같은 torchcodec ↔ NVIDIA ffmpeg 문제 | soundfile 로 읽어 `{"audio": ndarray}` 로 전달 → 동작 |
+| 재부팅 직후 available 1.2 GB | 파트너 작업이 다시 올라옴 | 파트너에게 알려 중지 후 실행 (2.5 GB 미만이면 실행 안 되게 명령에 조건 추가) |
 
 ## 재현 파일 (Jetson `~/eg2-lab`)
 
-`check.py`, `eg2.py`(공통 로더), `test_text.py`(3단계), `record.py`(웹캠 녹화), `test_vision2.py`·`test_vision3.py`(4단계), `bench.py`(6단계: `for m in text image video; do python bench.py $m; done`)
+`check.py`, `eg2.py`(공통 로더), `test_text.py`(3단계), `record.py`(웹캠 녹화), `test_vision2.py`·`test_vision3.py`(4단계), `make_audio.py`·`test_audio.py`·`test_audio2.py`(5단계), `bench.py`(6단계: `for m in text image video audio; do python bench.py $m; done`)
 
 ## AI 활용
 
