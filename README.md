@@ -16,14 +16,16 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 
 - 텍스트 검색: 768/256/128차원 모두 정답 1위
 - 이미지 검색: 장면에 맞춘 질의 5개 중 4개 정답 (오답은 렌즈가 가려진 프레임)
-- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md)
+- 웹캠 물체 검색(8단계): 라벨 목록 밖 물체는 가장 비슷한 이름으로 억지로 붙는다. YOLOE 박스 + 임베딩 재라벨(`--mode yoloe --relabel`)이 캔·컵·휴대폰을 모두 맞혔다. 약 12 fps, 크롭당 0.75 s, RAM 3.5 GB
+- 자세한 결과, 실패 → 원인 → 해결: [reports/results.md](reports/results.md) (1~6단계), [reports/step8.md](reports/step8.md) (8단계)
 
 ## 역할
 
 | 단계 | 담당 |
 |---|---|
 | 1~4, 6단계 (환경, 텍스트·이미지·동영상 검색, 자원 측정) | 민서 (iamminseo) |
-| 7단계~ (도메인 미세 조정, 웹캠 응용) | 팀원 |
+| 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
+| 7단계 (도메인 미세 조정) | 성찬 (진행 중) |
 
 ## 환경
 
@@ -56,6 +58,7 @@ python record.py                       # 웹캠 10초 녹화 → media/clip.mp4,
 python test_vision2.py                 # 4단계: 이미지·동영상 임베딩과 검색
 python test_vision3.py                 # 4단계 개선: 장면 맞춤 질의 정답률, prompt_name 유무 비교
 for m in text image video; do python bench.py $m 2>/dev/null | grep RESULT; done   # 6단계 측정
+python app.py --mode yoloe --relabel   # 8단계: 웹캠 물체 검색, http://<Jetson IP>:8200
 ```
 
 `test_vision3.py` 의 질의와 정답 번호는 이 저장소의 [reports/frames/](reports/frames/) 장면 기준이다. 새로 녹화하면 장면에 맞게 바꿔야 한다.
