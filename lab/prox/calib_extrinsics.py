@@ -6,10 +6,11 @@ import argparse, json, os, time
 import cv2, numpy as np, uvicorn
 from fastapi import FastAPI, Body
 from fastapi.responses import HTMLResponse, Response
-from stereo import load_world, undistort, triangulate, load_cam
+from stereo import load_world, undistort, triangulate, load_cam, open_source
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--cams", type=int, nargs=2, default=[0, 1])
+ap.add_argument("--cams", nargs=2, default=["0", "1"], help="장치 번호 또는 http://<보드>:8210/stream")
+ap.add_argument("--intr", nargs=2, default=None, help="렌즈 보정 파일 2개 (기본 calib/cam<장치번호>_intr.npz)")
 ap.add_argument("--res", default="640x480")
 ap.add_argument("--port", type=int, default=8200)
 args = ap.parse_args()
@@ -21,9 +22,7 @@ clicks = json.load(open(CLICKS_F)) if os.path.exists(CLICKS_F) else {"0": {}, "1
 snaps = {}
 
 def open_cam(i):
-    cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, W); cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
+    cap = open_source(i, W, H)
     assert cap.isOpened(), f"카메라 {i}을 열 수 없음"
     return cap
 
@@ -37,7 +36,7 @@ def take_snaps():
         cv2.imwrite(f"calib/snap{n}.jpg", f)
 
 def intr(n):
-    d = np.load(f"calib/cam{args.cams[n]}_intr.npz")
+    d = np.load(args.intr[n] if args.intr else f"calib/cam{args.cams[n]}_intr.npz")
     return d["K"], d["dist"]
 
 def solve():

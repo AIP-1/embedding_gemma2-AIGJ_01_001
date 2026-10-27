@@ -15,7 +15,8 @@ from ultralytics import YOLO
 import stereo as S
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--cams", type=int, nargs=2, default=[0, 1], help="calib_extrinsics.py와 같은 순서")
+ap.add_argument("--cams", nargs=2, default=["0", "1"], help="calib_extrinsics.py와 같은 순서. 장치 번호 또는 http://<보드>:8210/stream")
+ap.add_argument("--lag-ms", type=float, nargs=2, default=[0, 0], help="카메라별 전송 지연(ms). 원격 스트림은 ping 왕복의 절반 정도")
 ap.add_argument("--mode", choices=["ankle1", "stereo", "fused"], default="fused")
 ap.add_argument("--target", default=None, help='예: "red fire extinguisher"')
 ap.add_argument("--target-xy", default=None, help="예: 3.0,1.2 (직접 측정한 바닥 좌표)")
@@ -47,12 +48,10 @@ det = YOLO("yolo11n-pose.pt")
 
 # ---------------- 카메라 수신 (최신 프레임만 보관) ----------------
 class Cam(threading.Thread):
-    def __init__(self, dev):
+    def __init__(self, dev, lag=0.0):
         super().__init__(daemon=True)
-        self.cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
-        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, W); self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.cap = S.open_source(dev, W, H)
+        self.lag = lag / 1000.0               # 원격 스트림: 받은 시각에서 전송 지연을 빼서 촬영 시각에 가깝게
         assert self.cap.isOpened(), f"카메라 {dev}을 열 수 없음 (Q11, Q14 참고)"
         self.lock, self.frame, self.ts = threading.Lock(), None, 0.0
     def run(self):
@@ -60,7 +59,7 @@ class Cam(threading.Thread):
             ok, f = self.cap.read()
             if ok:
                 with self.lock:
-                    self.frame, self.ts = f, time.time()
+                    self.frame, self.ts = f, time.time() - self.lag
     def get(self):
         with self.lock:
             return self.ts, (None if self.frame is None else self.frame.copy())
@@ -306,7 +305,7 @@ now_global = 0.0
 
 def process_loop():
     global now_global
-    srcs = [Cam(d) for d in args.cams[:NUM_CAMS]]
+    srcs = [Cam(d, l) for d, l in list(zip(args.cams, args.lag_ms))[:NUM_CAMS]]
     for s in srcs:
         s.start()
     t0, n_frames, idx = time.time(), 0, 0

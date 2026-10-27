@@ -8,6 +8,17 @@ import cv2
 KP_CONF = 0.5
 NOSE, LS, RS, LA, RA = 0, 5, 6, 15, 16
 
+def open_source(dev, W, H):
+    """카메라 열기. 숫자면 이 보드의 /dev/videoN, http://... 이면 다른 보드의 cam_server.py MJPEG 스트림"""
+    if str(dev).isdigit():
+        cap = cv2.VideoCapture(int(dev), cv2.CAP_V4L2)
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, W); cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
+    else:
+        cap = cv2.VideoCapture(dev, cv2.CAP_FFMPEG)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
 def load_cam(path):
     d = np.load(path)
     K, dist, R, t = d["K"], d["dist"], d["R"], d["t"].reshape(3, 1)
