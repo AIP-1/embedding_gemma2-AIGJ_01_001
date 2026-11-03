@@ -31,6 +31,7 @@ Jetson Orin Nano Super 8GB에서 EmbeddingGemma 2(`google/embeddinggemma-2`)로 
 | 7단계 (도메인 미세 조정: 데이터 직접 작성, 학습 전후 비교) | 성찬 |
 | 8단계 (웹캠 물체 검색: yolo·relabel·yoloe 비교, `--relabel` 확장) | 성찬 |
 | 9단계 (사람 동작 인식: raw vs smooth 비교, 녹화·GRU 학습) | 성찬 |
+| 10단계 (카메라 2대 근접 감지: 렌즈·위치 보정, 스테레오 거리, 접근 알람) | 성찬, 김민서 |
 
 ## 환경
 
@@ -70,6 +71,7 @@ for m in text image video audio; do python bench.py $m 2>/dev/null | grep RESULT
 python data/make_data.py && python eval_ir.py && python train_ft.py   # 7단계: 데이터 생성, 기준 평가, 미세 조정
 python app.py --mode yoloe --relabel   # 8단계: 웹캠 물체 검색, http://<Jetson IP>:8200
 python pose_app.py                     # 9단계: 사람 동작 인식, http://<Jetson IP>:8200
+# 10단계: lab/prox/README.md 참고 (1호기 앱 + 2호기 cam_server.py 포트 8210)
 ```
 
 `test_vision3.py` 의 질의와 정답 번호는 이 저장소의 [reports/frames/](reports/frames/) 장면 기준이다. 새로 녹화하면 장면에 맞게 바꿔야 한다.
